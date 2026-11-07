@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Traffic Challan POS - Demo</title>
+
+<!-- QRCode.js creates a QR code in the browser. Internet is needed to load this CDN. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    background: #e9edf0;
+}
+
+.container {
+    max-width: 450px;
+    margin: auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.container h2 { text-align: center; }
+
+label {
+    display: block;
+    margin-top: 12px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+button {
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px;
+    border: 0;
+    background: #18324a;
+    color: white;
+    font-size: 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Exact target receipt canvas: 50mm wide x 101mm high */
+.receipt {
+    width: 50mm;
+    height: 101mm;
+    padding: 4mm;
+    margin: 20px auto;
+    background: white;
+    color: black;
+    font-family: "Courier New", monospace;
+    font-size: 8pt;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.center { text-align: center; }
+.bold { font-weight: bold; }
+.receipt, .receipt * { text-align: center !important; }
+
+.heading {
+    font-size: 10pt;
+    font-weight: bold;
+    line-height: 1.25;
+    margin-top: 1mm;
+}
+
+.demo {
+    color: #a00000;
+    font-size: 6.5pt;
+    font-weight: bold;
+    text-align: center;
+    line-height: 1.25;
+}
+
+.divider {
+    border-top: 1px dotted #000;
+    margin: 2mm 0;
+    flex: 0 0 auto;
+}
+
+.status {
+    font-size: 10pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 1mm 0;
+}
+
+.details {
+    line-height: 1.3;
+    font-size: 7pt;
+    font-family: 'Courier New';
+    overflow-wrap: anywhere;
+}
+
+.amount {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5mm;
+    font-size: 7.2pt;
+    line-height: 1.55;
+    white-space: nowrap;
+}
+
+.total {
+    font-size: 8pt;
+    font-weight: bold;
+    margin-top: 1mm;
+}
+
+/* This spacer helps use the available paper length */
+.receipt-spacer { flex: 1 1 auto; min-height: 1mm; }
+
+.qr-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 1mm 0;
+    min-height: 19mm;
+}
+
+#qrCode {
+    width: 19mm;
+    height: 19mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#qrCode img, #qrCode canvas {
+    width: 19mm !important;
+    height: 19mm !important;
+    display: block;
+}
+
+.qr-fallback {
+    font-size: 6pt;
+    text-align: center;
+}
+
+.footer {
+    text-align: center;
+    font-size: 6.5pt;
+    line-height: 1.3;
+    margin-top: 1mm;
+}
+
+/* Print the complete 50mm x 101mm receipt, not the POS form */
+@page {
+    size: 50mm 101mm;
+    margin: 0;
+}
+
+@media print {
+    html, body {
+        width: 50mm !important;
+        height: 101mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body * { visibility: hidden !important; }
+
+    .receipt, .receipt * { visibility: visible !important; }
+
+    .receipt {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 50mm !important;
+        height: 101mm !important;
+        min-height: 101mm !important;
+        max-height: 101mm !important;
+        margin: 0 !important;
+        padding: 2mm !important;
+        overflow: hidden !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print { display: none !important; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container no-print">
+    <h2>Traffic Challan POS — Demo</h2>
+
+    <label>Receipt Number</label>
+    <input id="receiptNo" value="DEMO-0001">
+
+    <label>Offender Name</label>
+    <input id="offender" placeholder="Enter offender name">
+
+    <label>Vehicle Registration</label>
+    <input id="vehicle" placeholder="Enter vehicle registration">
+
+    <label>Violation Code</label>
+    <input id="violation" value="24">
+
+    <label>Challan Amount (PKR)</label>
+    <input id="challan" type="number" min="0" step="1" value="1000">
+
+    <label>Service Fee (PKR)</label>
+    <input id="fee" type="number" min="0" step="1" value="17">
+
+    <label>Received By</label>
+    <input id="receiver" placeholder="Enter receiver name">
+
+    <label>Location</label>
+    <input id="location" value="Swat">
+
+    <button type="button" onclick="generateReceipt()">GENERATE RECEIPT</button>
+    <button type="button" onclick="printReceipt()">PRINT RECEIPT</button>
+</div>
+
+<!-- Printable demo receipt -->
+<div class="receipt" id="receipt">
+    <div class="demo"></div>
+
+    <div class="center heading">
+        Khyber Pakhtunkhwa<br>
+        Traffic Police
+    </div>
+
+    <div class="demo"></div>
+    <div class="divider"></div>
+
+    <div class="center bold" id="rLocation">Swat</div>
+    <div class="center bold" id="rNumber">DEMO-0001</div>
+    <div class="status">PAID</div>
+
+    <div class="details bold">
+        <div id="rOffender">Offender: -</div>
+        <div id="rVehicle">V. Reg#: -</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="center"></div>
+
+    <div class="amount">
+        <span>Violation Code:</span>
+        <span id="rViolation">24</span>
+    </div>
+
+    <div class="amount">
+        <span>Challan Amount  :</span>
+        <span id="rChallan">PKR.     1,000</span>
+    </div>
+
+    <div class="amount">
+        <span>Service Fee         :</span>
+        <span id="rFee">PKR.     17</span>
+    </div>
+
+    <span>
+        (Incl.of KPSTS)
+    </span>
+
+    <div class="divider"></div>
+    <div class="center"></div>
+
+    <!-- No dotted divider after total -->
+    <div class="amount total">
+        <span>Total Amount:</span>
+        <span id="rTotal">PKR.   1017</span>
+    </div>
+
+
+    <div class="qr-wrap">
+        <div id="qrCode" aria-label="Random demonstration QR code">
+            <span class="qr-fallback">QR DEMO</span>
+        </div>
+    </div>
+
+    <div class="details">
+        <div style="font-size: 9px;" id="rReceiver">Received By: -</div>
+        <span id="rDate"></span>
+        <span id="rTime"></span>
+    </div>
+
+    <span style="font-size: 9px;">
+        Traffic Police Helpline 1915
+    </span>
+
+    <div class="footer">
+       
+    </div>
+</div>
+
+<script>
+let currentDemoToken = "";
+
+function formatPKR(value) {
+    return value.toLocaleString("en-PK", {
+        maximumFractionDigits: 0
+    });
+}
+
+function makeRandomToken() {
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function createDemoQR(token) {
+    const qrBox = document.getElementById("qrCode");
+    qrBox.innerHTML = "";
+
+    // The QR contains only a random demo reference, not payment credentials.
+    const qrText = "1 (433) 912-3399";
+    currentDemoToken = token;
+
+    if (typeof QRCode === "undefined") {
+        qrBox.innerHTML = '<span class="qr-fallback">QR unavailable<br>Check internet</span>';
+        return;
+    }
+
+    new QRCode(qrBox, {
+        text: qrText,
+        width: 120,
+        height: 120,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+    });
+}
+
+function generateReceipt() {
+    const receiptNo = document.getElementById("receiptNo").value.trim();
+    const offender = document.getElementById("offender").value.trim();
+    const vehicle = document.getElementById("vehicle").value.trim();
+    const violation = document.getElementById("violation").value.trim();
+    const challan = Number(document.getElementById("challan").value);
+    const fee = Number(document.getElementById("fee").value);
+    const receiver = document.getElementById("receiver").value.trim();
+    const location = document.getElementById("location").value.trim();
+
+    if (!receiptNo || !offender || !violation || !receiver) {
+        alert("Please fill in the receipt number, offender name, violation code and receiver.");
+        return false;
+    }
+
+    if (!Number.isFinite(challan) || !Number.isFinite(fee) ||
+        challan < 0 || fee < 0) {
+        alert("Please enter valid non-negative amounts.");
+        return false;
+    }
+
+    const total = challan + fee;
+    const now = new Date();
+
+    document.getElementById("rLocation").textContent = location || "-";
+    document.getElementById("rNumber").textContent = receiptNo;
+    document.getElementById("rOffender").textContent = "Offender: " + offender;
+    document.getElementById("rVehicle").textContent = "V. Reg#: " + (vehicle || "N/A");
+    document.getElementById("rViolation").textContent = violation;
+    document.getElementById("rChallan").textContent = formatPKR(challan);
+    document.getElementById("rFee").textContent = formatPKR(fee);
+    document.getElementById("rTotal").textContent = formatPKR(total);
+    document.getElementById("rReceiver").textContent = "Received By: " + "TO "+receiver + "(3911)";
+    document.getElementById("rDate").textContent =
+        "" + now.toLocaleDateString("en-GB");
+    document.getElementById("rTime").textContent =
+        "" + now.toLocaleTimeString("en-US");
+
+    createDemoQR(makeRandomToken());
+    return true;
+}
+
+function printReceipt() {
+    if (generateReceipt()) {
+        window.print();
+    }
+}
+
+// Show a demo QR on initial page load too.
+window.addEventListener("load", () => {
+    createDemoQR(makeRandomToken());
+});
+</script>
+
+</body>
+</html>
